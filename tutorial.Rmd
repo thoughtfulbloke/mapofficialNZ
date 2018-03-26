@@ -7,7 +7,9 @@ output:
     keep_md: yes
 ---
 
-
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
 ## Goal
 
@@ -25,8 +27,7 @@ https://r-spatial.github.io/sf/
 
 With the perquisites sorted, to follow along with every part in this walk-through the following libraries are needed: rvest, readxl, dplyr, purrr, stringr, tidyr, sf, ggplot2, and viridis. If you do not already have these, you will need to use the install.packages() command in R. This code loads the libraries once they are installed:
 
-
-```r
+```{r, message=FALSE, warning=FALSE}
 library(rvest)
 library(readxl)
 library(dplyr)
@@ -51,8 +52,7 @@ https://minhealthnz.shinyapps.io/datapharm-beta
 
 using the R commands:
 
-
-```r
+```{r}
 if(!file.exists("perscriptions.zip")){
   download.file("https://minhealthnz.shinyapps.io/datapharm-beta/_w_afb19700/session/f628744ef0b03588f50be51080e7cd44/download/downloadFullData.t1?w=afb19700", destfile="perscriptions.zip")
 }
@@ -65,8 +65,7 @@ http://archive.stats.govt.nz/Census/2013-census/data-tables/dhb-tables.aspx
 
 using the R commands:
 
-
-```r
+```{r}
 if(!file.exists("DHB_demography.xls")){
   download.file("http://archive.stats.govt.nz/~/media/Statistics/Census/2013%20Census/data-tables/dhb/district-health-board-tables.xls",
                 destfile="DHB_demography.xls", mode="wb")
@@ -79,8 +78,7 @@ https://www.pharmac.govt.nz/healthpros/PharmaceuticalSchedule/Schedule
 
 This does not have a downloadable version, but we can reach out and capture the information in the online resource using the rvest package. First we need a custom function that gets the information about the links on a page and returns them as a set of data.
 
-
-```r
+```{r}
 get_schedule_links <- function(link){
   base_url <- "https://www.pharmac.govt.nz"
   page <- read_html(paste0(base_url, link))
@@ -93,8 +91,7 @@ get_schedule_links <- function(link){
 
 The first stage is to get the links fro the starting page. Because the site structure is hierarchical and the way it is organised, links that are part of the schedule have the term "code" in them. To save effort, this will only run if we have not previously scavenged, and saved, the schedule.
 
-
-```r
+```{r}
 if(!file.exists("pharmac_schedule.csv")){
   layer1 <- get_schedule_links("/healthpros/PharmaceuticalSchedule/Schedule") %>%
     filter(str_detect(links, fixed("code"))) %>%
@@ -106,8 +103,7 @@ if(!file.exists("pharmac_schedule.csv")){
 
 We can take the collection of links and use the map function to get the links from the page each link leads to. Because the structure is hierarchical, and this is reflected in the way the site is set up, we can identify pages deeper in the schedule since the url is an extension of the current pages URL.
 
-
-```r
+```{r}
 if(!file.exists("pharmac_schedule.csv")){
   layer2_all <- layer1 %>% 
     rename(link1 = links, linktext1 = linktext,
@@ -130,8 +126,7 @@ if(!file.exists("pharmac_schedule.csv")){
 
 The two get the next set of links, we repeat the process with the links gathered in the second stage.
 
-
-```r
+```{r}
 if(!file.exists("pharmac_schedule.csv")){
   layer3_all <- layer2 %>% 
     rename(link2 = links, linktext2 = linktext,
@@ -151,8 +146,7 @@ if(!file.exists("pharmac_schedule.csv")){
 
 For the final step, the third collection of links is used as the base. The medication pages can be identified by "osq" in their URL. Once gathered, the collective information is saved as pharmac_schedule.csv
 
-
-```r
+```{r}
 if(!file.exists("pharmac_schedule.csv")){
   layer4 <- layer3 %>% 
     rename(link3 = links, linktext3 = linktext,
@@ -175,16 +169,14 @@ Downloading files does need (free) registration. I chose to download the file in
 
 For the demographic data, we read in the excel file, changing some column names to slightly more convenient ones along the way
 
-
-```r
+```{r}
 raw_excel <- read_excel("DHB_demography.xls", "Table 1", skip=8) %>%
   rename(description= X__1, pop2013=`Total people__1`)
 ```
 
 However, this data has a key problem. The information about each region is in the same column (as subheadings) as the information about which age group the data is for (as entries). We want the region information to accompany each entry, and we only want the totals for each entry. To do this we take advantage of the regular pattern in the data that the headings have no numerical entries beside them.
 
-
-```r
+```{r}
 population <- raw_excel %>% 
   # if there is nothing in the description column, it is a blank line, so removed
   filter(!is.na(description)) %>%
@@ -211,8 +203,7 @@ rm(raw_excel)
 
 For the data in the Pharmac Schedule, we want those medicines classified as being "Antibacterials" at the second stage of the hierarchical schedule.
 
-
-```r
+```{r}
 antibact <- read.csv("pharmac_schedule.csv", stringsAsFactors = FALSE) %>%
   select(linktext1, linktext2, linktext3, linktext) %>% 
   filter(linktext2 == "Antibacterials")
@@ -220,8 +211,7 @@ antibact <- read.csv("pharmac_schedule.csv", stringsAsFactors = FALSE) %>%
 
 Taking the prescription data, we combine it with the pharmac schedule to get an idea of what the medications were being prescribed for, on the understanding that the entries in the Chemical column of the prescription data match the text in the linktext column in the schedule.
 
-
-```r
+```{r}
 perscriptions <- read.csv("fulldata/Data_ByChemical.csv", stringsAsFactors = FALSE)
 
 combined <- perscriptions %>%
@@ -231,8 +221,7 @@ combined <- perscriptions %>%
 From this data we want the number prescriptions, regardless of specific medication, for each DHB and year. Then we want to blend in the population demographic data from the 2013 census
 
 
-
-```r
+```{r}
 prepared <- combined %>% 
   filter(Type == "Prescriptions") %>%
   group_by(DHB, YearDisp) %>%
@@ -259,16 +248,13 @@ prepared <- combined %>%
 
 To check that things were working I made a graph of the per capita / year pattern for each region
 
-
-```r
+```{r}
 ggplot(prepared, aes(x=Year, y=per_cap, colour=DHB)) +
   geom_point() + geom_line() + facet_wrap(~DHB, ncol=5) +
   theme_minimal() + ylab("Prescriptions per Capita") + xlab("Year (2012-2016)") + 
   ggtitle("Non-antibacterial prescriptions per capita (2013 census pop.) by DHB") +
   theme(legend.position="none")
 ```
-
-![](tutorial_files/figure-html/unnamed-chunk-14-1.png)<!-- -->
 
 For those that know the locations of the District Health Boards from the names, they will recognize that northerly DHBs are prescribing antibacterials at nearly twice the per capita rate as the west coast of the South Island, and there is a general south-north gradient of prescription rates (For those that don't know locations, see the map at the end). This is very unexpected.
 
@@ -287,55 +273,32 @@ In this case we are not testing the size of the difference, just the unlikelines
 
 Step 1, work out the aggregate "total of rates" 
 
-
-```r
+```{r}
 prepared %>% group_by(Island) %>% summarise(abr= sum(per_cap))
-```
-
-```
-## # A tibble: 2 x 2
-##   Island   abr
-##   <chr>  <dbl>
-## 1 N       75.8
-## 2 S       19.5
 ```
 
 We now make 1 million random draws of 25 of the rates (representing hypothetical South Islands) and calculate the sum of each draw. Then we see in how many cases the sum of the random draw was as low (or lower) than reality. Making 25 million random draws takes a few moments.
 
-
-```r
+```{r}
 SI_perturb <- replicate(1000000, sum(sample(prepared$per_cap, 25, replace=FALSE)))
 sum(SI_perturb <= 19.5)
-```
-
-```
-## [1] 0
-```
-
-```r
 min(SI_perturb)
 ```
 
-```
-## [1] 20.75628
-```
-
-When I ran the code, there were zero of the million times times a random arrangement was a low as the true South Island. The lowest value at random was 20.7562762 which is well above 19.4888. So we can conclude that the geographic arrangement, and its consistency over time, is not random.
+When I ran the code, there were zero of the million times times a random arrangement was a low as the true South Island. The lowest value at random was `r min(SI_perturb)` which is well above 19.4888. So we can conclude that the geographic arrangement, and its consistency over time, is not random.
 
 ## Making the map
 
 Coming back to making the map, we read in the map file
 
-
-```r
+```{r, message=FALSE, warning=FALSE}
 DHB_map <- st_read("kx-nz-district-health-boards-2012-KML/nz-district-health-boards-2012.kml", quiet=TRUE)
 ```
 
 To match the data to the map, we want the data to have the same heading (in this case "Name") as the identifiers in the map,
 and have the entries formatted in the same way. So we do a little tidy up of our data. We also pick only one year to avoid complications about how to represent multiple times in one place, and since the census was 2013 this is the most accurate year for population information.
 
-
-```r
+```{r}
 formap <- prepared %>% filter(Year == 13) %>% rename(Name = DHB) %>%
   mutate(Name = case_when(
     Name == "Capital & Coast" ~ "Capital and Coast",
@@ -346,10 +309,9 @@ formap <- prepared %>% filter(Year == 13) %>% rename(Name = DHB) %>%
   select(Name, per_cap)
 ```
 
-Now we take a moment to think about colour schemes. As the data ranges from 0.6314234 to 1.3002559, thinking in terms of 71 .01 steps, with a legend displaying 10 .7 steps, seems reasonable. For each entry, we calculate how far along the spectrum it is, starting from 1 as the lowest. Then we build a colour palette with a range we like.
+Now we take a moment to think about colour schemes. As the data ranges from `r min(formap$per_cap)` to `r max(formap$per_cap)`, thinking in terms of 71 .01 steps, with a legend displaying 10 .7 steps, seems reasonable. For each entry, we calculate how far along the spectrum it is, starting from 1 as the lowest. Then we build a colour palette with a range we like.
 
-
-```r
+```{r}
 formap <- formap %>%
   mutate(colour_step = round(100*(formap$per_cap - .63), 0) +1)
 col_palette <- viridis(71, begin = .3, end = .95)
@@ -357,15 +319,14 @@ col_palette <- viridis(71, begin = .3, end = .95)
 
 We join the data to the map, having made sure we have an entry for each item we want mapped.
 
-
-```r
+```{r, warning=FALSE}
 themap <- formap %>% inner_join(DHB_map, by="Name")
 ```
 
 We make the map, taking advantages of New Zealand's tall thin shape to have a large legend.
 
+```{r fig.height=7, fig.width=6}
 
-```r
 legend_steps <- rev(c(1,8,15,22,29,36,43,50,57,64,71))
 legend_text <- ((legend_steps - 1) / 100) + .63
 
@@ -374,7 +335,6 @@ plot(st_geometry(themap$geometry), lty="blank",
      main="Antibacterial perscriptions per capita, 2013")
 legend("topleft", legend=legend_text, fill=col_palette[legend_steps], bty="n",
        title="Prescriptions per capita")
-```
 
-![](tutorial_files/figure-html/unnamed-chunk-21-1.png)<!-- -->
+```
 
